@@ -2,8 +2,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //
 // The transfer's percent follows the device's region, like the sizes
-// beside it, not the app's language (docs/kararlar/0008, "Dil ve bölge
-// seçimi"; #483). The cases that set the two apart fail if the percent
+// beside it, not the app's language
+// (docs/decisions/0008-languages-and-regions.md; #483). The cases that set the two apart fail if the percent
 // comes from the language.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:material_ui/material_ui.dart';

@@ -8,7 +8,7 @@ import 'package:material_ui/material_ui.dart';
 import 'package:totaldrop/ui/core/mark.dart';
 
 // The mark's shape and timing must match the SVG, the website and the
-// Linux app (docs/tasarim.md, "The mark: Köşe" and "Motion").
+// Linux app (docs/design.md, "The mark: Köşe" and "Motion").
 void main() {
   test(
     'the loop lasts 3.2 s: four quarter turns of 0.6 s, each with a 0.2 s rest',
@@ -62,7 +62,7 @@ void main() {
     },
   );
 
-  // Every copy of the mark uses the same path and timing (docs/tasarim.md).
+  // Every copy of the mark uses the same path and timing (docs/design.md).
   const path = 'M55 15H97V57A42 42 0 1 1 55 15Z';
   test('the SVGs, the icon script and the site draw the same path', () {
     for (final f in [
