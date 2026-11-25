@@ -7,6 +7,7 @@ import 'package:material_ui/material_ui.dart';
 
 import '../../l10n/app_localizations.dart';
 import '../../src/rust/api/transfer.dart';
+import 'adaptive.dart';
 import 'l10n.dart';
 import 'mark.dart';
 import 'theme.dart';
@@ -64,13 +65,16 @@ String? causeText(AppLocalizations l, String cause) {
 /// TalkBack says nothing; a live region makes it read the new headline
 /// (#271). Only for text that changes with the stage, never for text that
 /// changes by itself, such as progress, or it would talk without pause.
+/// Pass [container]: true only where a sibling progress widget would otherwise
+/// merge into the live region node.
 class Announced extends StatelessWidget {
-  const Announced(this.child, {super.key});
+  const Announced(this.child, {super.key, this.container = false});
   final Widget child;
+  final bool container;
 
   @override
   Widget build(BuildContext context) =>
-      Semantics(liveRegion: true, child: child);
+      Semantics(container: container, liveRegion: true, child: child);
 }
 
 /// The four verification words, with the instruction to compare them.
@@ -149,12 +153,9 @@ class ErrorPanel extends StatelessWidget {
   final TransferError error;
   final VoidCallback onRetry;
 
-  @override
-  Widget build(BuildContext context) {
-    final l = AppLocalizations.of(context);
+  static Widget _header(BuildContext context, TransferError error) {
     final theme = Theme.of(context);
     final wrongCode = error.kind == ErrorKind.wrongCode;
-    final cause = causeMessage(context, error.cause);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -172,8 +173,23 @@ class ErrorPanel extends StatelessWidget {
             style: theme.textTheme.titleMedium,
           ),
         ),
+      ],
+    );
+  }
+
+  static Widget _controls(
+    BuildContext context,
+    TransferError error,
+    VoidCallback onRetry,
+  ) {
+    final l = AppLocalizations.of(context);
+    final theme = Theme.of(context);
+    final cause = causeMessage(context, error.cause);
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
         if (error.detail.isNotEmpty) ...[
-          Gap.s,
           ExpansionTile(
             title: Text(l.moreInfo, style: theme.textTheme.bodyMedium),
             expandedCrossAxisAlignment: CrossAxisAlignment.start,
@@ -209,10 +225,52 @@ class ErrorPanel extends StatelessWidget {
               ),
             ],
           ),
+          Gap.l,
         ],
-        Gap.l,
         FilledButton(onPressed: onRetry, child: Text(l.tryAgain)),
       ],
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _header(context, error),
+        if (error.detail.isNotEmpty) Gap.s else Gap.l,
+        _controls(context, error, onRetry),
+      ],
+    );
+  }
+}
+
+/// Full-screen failed-transfer stage: keeps the error headline above the fold
+/// and interactive details + Try again button below the fold in Tabletop
+/// posture (or across the vertical hinge in Book posture), while staying a
+/// centered single column on flat displays (#632).
+class AdaptiveErrorStage extends StatelessWidget {
+  const AdaptiveErrorStage({
+    super.key,
+    required this.error,
+    required this.onRetry,
+  });
+
+  final TransferError error;
+  final VoidCallback onRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    return AdaptivePaneLayout(
+      allowFlatTwoPane: false,
+      primary: CenteredScroll(child: ErrorPanel._header(context, error)),
+      secondary: CenteredScroll(
+        child: ErrorPanel._controls(context, error, onRetry),
+      ),
+      singlePane: CenteredScroll(
+        child: ErrorPanel(error: error, onRetry: onRetry),
+      ),
     );
   }
 }
@@ -271,29 +329,44 @@ class TransferProgress extends StatelessWidget {
 
 /// A screen's content, centred, that scrolls when it is taller than the
 /// screen: with the largest text, a long language or "More information"
-/// open, nothing runs off the bottom (#322).
+/// open, nothing runs off the bottom (#322). Keeps content within
+/// [maxReadableWidth] on tablets and foldables while preserving full-viewport
+/// scrolling and tighter margins on narrow cover displays (#632).
 class CenteredScroll extends StatelessWidget {
-  const CenteredScroll({
-    super.key,
-    required this.child,
-    this.padding = const EdgeInsets.all(24),
-  });
+  const CenteredScroll({super.key, required this.child, this.padding});
 
   final Widget child;
-  final EdgeInsets padding;
+  final EdgeInsets? padding;
 
   @override
-  Widget build(BuildContext context) => LayoutBuilder(
-    builder: (context, constraints) => SingleChildScrollView(
-      padding: padding,
-      child: ConstrainedBox(
-        constraints: BoxConstraints(
-          minHeight: math.max(0, constraints.maxHeight - padding.vertical),
-        ),
-        child: Center(child: child),
+  Widget build(BuildContext context) {
+    return AdaptiveSinglePane(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final effective =
+              padding ??
+              EdgeInsets.all(adaptiveHorizontalMargin(constraints.maxWidth));
+          return SingleChildScrollView(
+            padding: effective,
+            child: ConstrainedBox(
+              constraints: BoxConstraints(
+                minHeight: math.max(
+                  0,
+                  constraints.maxHeight - effective.vertical,
+                ),
+              ),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: maxReadableWidth),
+                  child: child,
+                ),
+              ),
+            ),
+          );
+        },
       ),
-    ),
-  );
+    );
+  }
 }
 
 /// One button of a [ButtonPair].
@@ -422,6 +495,8 @@ class DoneBadge extends StatelessWidget {
   const DoneBadge({super.key});
 
   @override
-  Widget build(BuildContext context) =>
-      const TotalDropMark(size: 140, done: true);
+  Widget build(BuildContext context) => TotalDropMark(
+    size: AdaptivePaneLayout.isTabletopOf(context) ? 96 : 140,
+    done: true,
+  );
 }

@@ -22,8 +22,8 @@ if [ "${1:-}" = "--check-recipe" ]; then
 fi
 
 ART_DIR="${1:?usage: verify.sh [--check-recipe | <artifact-dir>]}"
-[ -f "$ART_DIR/totaldrop-fdroid-0.3.0-beta.6-armeabi-v7a.apk" ] || { echo "missing artifact $ART_DIR/totaldrop-fdroid-0.3.0-beta.6-armeabi-v7a.apk" >&2; exit 1; }
-[ -s "$ART_DIR/totaldrop-fdroid-0.3.0-beta.6-armeabi-v7a.apk" ] || { echo "empty artifact $ART_DIR/totaldrop-fdroid-0.3.0-beta.6-armeabi-v7a.apk" >&2; exit 1; }
+[ -f "$ART_DIR/totaldrop-fdroid-0.4.0-beta.1-armeabi-v7a.apk" ] || { echo "missing artifact $ART_DIR/totaldrop-fdroid-0.4.0-beta.1-armeabi-v7a.apk" >&2; exit 1; }
+[ -s "$ART_DIR/totaldrop-fdroid-0.4.0-beta.1-armeabi-v7a.apk" ] || { echo "empty artifact $ART_DIR/totaldrop-fdroid-0.4.0-beta.1-armeabi-v7a.apk" >&2; exit 1; }
 [ -f "$ART_DIR/SHA256SUMS" ] || { echo "missing $ART_DIR/SHA256SUMS" >&2; exit 1; }
 (cd "$ART_DIR" && sha256sum -c SHA256SUMS)
-echo "artifact verified: $ART_DIR/totaldrop-fdroid-0.3.0-beta.6-armeabi-v7a.apk"
+echo "artifact verified: $ART_DIR/totaldrop-fdroid-0.4.0-beta.1-armeabi-v7a.apk"

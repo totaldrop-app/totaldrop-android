@@ -6,6 +6,7 @@ import 'package:material_ui/material_ui.dart';
 import '../../data/background_access.dart';
 import '../../data/settings_repository.dart';
 import '../../l10n/app_localizations.dart';
+import '../core/adaptive.dart';
 import '../core/l10n.dart';
 import '../core/theme.dart';
 import '../setup/background_setup_view.dart';
@@ -28,10 +29,13 @@ class SettingsView extends StatefulWidget {
 
 class _SettingsViewState extends State<SettingsView> {
   late final _server = TextEditingController(text: widget.settings.server);
+  final _serverFieldKey = GlobalKey();
+  final _serverFocusNode = FocusNode();
   bool _invalid = false;
 
   @override
   void dispose() {
+    _serverFocusNode.dispose();
     _server.dispose();
     super.dispose();
   }
@@ -73,130 +77,148 @@ class _SettingsViewState extends State<SettingsView> {
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
     final theme = Theme.of(context);
+
+    final connectionAndPrivacy = <Widget>[
+      Text(l.settingsServer, style: theme.textTheme.titleLarge),
+      Gap.s,
+      Text(l.settingsServerHelp, style: theme.textTheme.bodyMedium),
+      Gap.m,
+      TextField(
+        key: _serverFieldKey,
+        focusNode: _serverFocusNode,
+        controller: _server,
+        autocorrect: false,
+        keyboardType: TextInputType.url,
+        // An address reads left to right in every language.
+        textDirection: TextDirection.ltr,
+        decoration: InputDecoration(
+          errorText: _invalid ? l.settingsServerInvalid : null,
+          prefixIcon: const Icon(Icons.dns_outlined),
+        ),
+        onChanged: (_) => setState(() => _invalid = false),
+        onSubmitted: (_) => _save(),
+      ),
+      Gap.m,
+      FilledButton.tonal(onPressed: _save, child: Text(l.settingsSave)),
+      Gap.s,
+      Align(
+        alignment: AlignmentDirectional.centerStart,
+        child: TextButton(
+          onPressed: () async {
+            await widget.settings.resetServer();
+            setState(() {
+              _server.text = widget.settings.server;
+              _invalid = false;
+            });
+          },
+          child: Text(l.settingsServerReset),
+        ),
+      ),
+      Gap.l,
+      const Divider(),
+      Gap.l,
+      Text(l.settingsPrivacy, style: theme.textTheme.titleLarge),
+      Gap.s,
+      Text(l.settingsPrivacyBody, style: theme.textTheme.bodyMedium),
+      Gap.m,
+      ListenableBuilder(
+        listenable: widget.settings,
+        builder: (context, _) => SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(l.privacyMode),
+          subtitle: Text(l.privacyModeHint),
+          value: widget.settings.privacyMode,
+          onChanged: (on) async {
+            if (on && !await _confirmPrivacy(context)) return;
+            try {
+              await widget.settings.setPrivacyMode(on);
+            } on Exception {
+              // Not saved: the switch keeps showing the setting in force.
+            }
+          },
+        ),
+      ),
+    ];
+
+    final backgroundAndAbout = <Widget>[
+      if (widget.background is! NoBackgroundLimits) ...[
+        Text(l.settingsBackground, style: theme.textTheme.titleLarge),
+        Gap.s,
+        Text(l.setupBackgroundBody, style: theme.textTheme.bodyMedium),
+        Gap.m,
+        Align(
+          alignment: AlignmentDirectional.centerStart,
+          child: FilledButton.tonal(
+            onPressed: () => Navigator.push(
+              context,
+              MaterialPageRoute<void>(
+                builder: (context) => BackgroundSetupView(
+                  access: widget.background,
+                  onDone: ({required skipped}) => Navigator.pop(context),
+                ),
+              ),
+            ),
+            child: Text(l.settingsBackgroundOpen),
+          ),
+        ),
+        Gap.l,
+        const Divider(),
+        Gap.l,
+      ],
+      Text(l.settingsAbout, style: theme.textTheme.titleLarge),
+      Gap.s,
+      Text(l.settingsAboutBody, style: theme.textTheme.bodyMedium),
+      // The code and the verification words come from one English
+      // word list, so devices in different languages match (ADR 0008).
+      Gap.s,
+      Text(
+        l.settingsWordsEnglish,
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+      if (hasDraftTranslation(context)) ...[
+        Gap.s,
+        Text(
+          l.draftTranslation,
+          style: theme.textTheme.bodySmall?.copyWith(
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+        ),
+      ],
+      Gap.s,
+      Text(
+        l.settingsVersion(isolate(widget.version)),
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+      Text(
+        'totaldrop.app',
+        style: theme.textTheme.bodySmall?.copyWith(
+          color: theme.colorScheme.onSurfaceVariant,
+        ),
+      ),
+    ];
+
     return Scaffold(
       appBar: AppBar(title: Text(l.settings)),
-      body: ListView(
-        padding: const EdgeInsets.all(24),
-        children: [
-          Text(l.settingsServer, style: theme.textTheme.titleLarge),
-          Gap.s,
-          Text(l.settingsServerHelp, style: theme.textTheme.bodyMedium),
-          Gap.m,
-          TextField(
-            controller: _server,
-            autocorrect: false,
-            keyboardType: TextInputType.url,
-            // An address reads left to right in every language.
-            textDirection: TextDirection.ltr,
-            decoration: InputDecoration(
-              errorText: _invalid ? l.settingsServerInvalid : null,
-              prefixIcon: const Icon(Icons.dns_outlined),
-            ),
-            onChanged: (_) => setState(() => _invalid = false),
-            onSubmitted: (_) => _save(),
+      body: SafeArea(
+        child: AdaptivePaneLayout(
+          allowFlatTwoPane: false,
+          allowTabletop: false,
+          primary: AdaptiveScrollColumn(children: connectionAndPrivacy),
+          secondary: AdaptiveScrollColumn(children: backgroundAndAbout),
+          singlePane: AdaptiveScrollColumn(
+            children: [
+              ...connectionAndPrivacy,
+              Gap.l,
+              const Divider(),
+              Gap.l,
+              ...backgroundAndAbout,
+            ],
           ),
-          Gap.m,
-          FilledButton.tonal(onPressed: _save, child: Text(l.settingsSave)),
-          Gap.s,
-          Align(
-            alignment: AlignmentDirectional.centerStart,
-            child: TextButton(
-              onPressed: () async {
-                await widget.settings.resetServer();
-                setState(() {
-                  _server.text = widget.settings.server;
-                  _invalid = false;
-                });
-              },
-              child: Text(l.settingsServerReset),
-            ),
-          ),
-          Gap.l,
-          const Divider(),
-          Gap.l,
-          Text(l.settingsPrivacy, style: theme.textTheme.titleLarge),
-          Gap.s,
-          Text(l.settingsPrivacyBody, style: theme.textTheme.bodyMedium),
-          Gap.m,
-          ListenableBuilder(
-            listenable: widget.settings,
-            builder: (context, _) => SwitchListTile(
-              contentPadding: EdgeInsets.zero,
-              title: Text(l.privacyMode),
-              subtitle: Text(l.privacyModeHint),
-              value: widget.settings.privacyMode,
-              onChanged: (on) async {
-                if (on && !await _confirmPrivacy(context)) return;
-                try {
-                  await widget.settings.setPrivacyMode(on);
-                } on Exception {
-                  // Not saved: the switch keeps showing the setting in force.
-                }
-              },
-            ),
-          ),
-          if (widget.background is! NoBackgroundLimits) ...[
-            Gap.l,
-            const Divider(),
-            Gap.l,
-            Text(l.settingsBackground, style: theme.textTheme.titleLarge),
-            Gap.s,
-            Text(l.setupBackgroundBody, style: theme.textTheme.bodyMedium),
-            Gap.m,
-            Align(
-              alignment: AlignmentDirectional.centerStart,
-              child: FilledButton.tonal(
-                onPressed: () => Navigator.push(
-                  context,
-                  MaterialPageRoute<void>(
-                    builder: (context) => BackgroundSetupView(
-                      access: widget.background,
-                      onDone: ({required skipped}) => Navigator.pop(context),
-                    ),
-                  ),
-                ),
-                child: Text(l.settingsBackgroundOpen),
-              ),
-            ),
-          ],
-          Gap.l,
-          const Divider(),
-          Gap.l,
-          Text(l.settingsAbout, style: theme.textTheme.titleLarge),
-          Gap.s,
-          Text(l.settingsAboutBody, style: theme.textTheme.bodyMedium),
-          // The code and the verification words come from one English
-          // word list, so devices in different languages match (ADR 0008).
-          Gap.s,
-          Text(
-            l.settingsWordsEnglish,
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          if (hasDraftTranslation(context)) ...[
-            Gap.s,
-            Text(
-              l.draftTranslation,
-              style: theme.textTheme.bodySmall?.copyWith(
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ],
-          Gap.s,
-          Text(
-            l.settingsVersion(isolate(widget.version)),
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-          Text(
-            'totaldrop.app',
-            style: theme.textTheme.bodySmall?.copyWith(
-              color: theme.colorScheme.onSurfaceVariant,
-            ),
-          ),
-        ],
+        ),
       ),
     );
   }

@@ -16,8 +16,8 @@ if [ "${1:-}" = "--check-recipe" ]; then
   [ -f "$RECIPE" ] || { echo "missing $RECIPE" >&2; exit 1; }
   [ -e "$DELEGATE" ] || { echo "missing upstream delegate $DELEGATE" >&2; exit 1; }
   grep -q 'unit_id = "android-fdroid-apk-arm64-v8a"' "$RECIPE"
-  grep -q 'artifact_name = "totaldrop-fdroid-0.3.0-beta.6-arm64-v8a.apk"' "$RECIPE"
-  echo "recipe check ok: android-fdroid-apk-arm64-v8a -> totaldrop-fdroid-0.3.0-beta.6-arm64-v8a.apk"
+  grep -q 'artifact_name = "totaldrop-fdroid-0.4.0-beta.1-arm64-v8a.apk"' "$RECIPE"
+  echo "recipe check ok: android-fdroid-apk-arm64-v8a -> totaldrop-fdroid-0.4.0-beta.1-arm64-v8a.apk"
   exit 0
 fi
 
@@ -29,9 +29,9 @@ if [ "${1:-}" = "--package-staged" ]; then
   trap 'rm -rf "$stage_root"' EXIT
   cp -R "$STAGE_IN/." "$stage_root/" 2>/dev/null || true
   printf 'unit=%s\narch=%s\nformat=%s\ntarget=%s\n' "android-fdroid-apk-arm64-v8a" "arm64-v8a" "fdroid-apk" "aarch64-linux-android" >"$stage_root/BUILD_METADATA.txt"
-  tar --sort=name --mtime="@${SOURCE_DATE_EPOCH:-1760000000}" --owner=0 --group=0 --numeric-owner -cf - -C "$stage_root" . | gzip -n >"$OUT_DIR/totaldrop-fdroid-0.3.0-beta.6-arm64-v8a.apk"
-  (cd "$OUT_DIR" && sha256sum "totaldrop-fdroid-0.3.0-beta.6-arm64-v8a.apk" >SHA256SUMS)
-  echo "packaged android-fdroid-apk-arm64-v8a -> $OUT_DIR/totaldrop-fdroid-0.3.0-beta.6-arm64-v8a.apk"
+  tar --sort=name --mtime="@${SOURCE_DATE_EPOCH:-1760000000}" --owner=0 --group=0 --numeric-owner -cf - -C "$stage_root" . | gzip -n >"$OUT_DIR/totaldrop-fdroid-0.4.0-beta.1-arm64-v8a.apk"
+  (cd "$OUT_DIR" && sha256sum "totaldrop-fdroid-0.4.0-beta.1-arm64-v8a.apk" >SHA256SUMS)
+  echo "packaged android-fdroid-apk-arm64-v8a -> $OUT_DIR/totaldrop-fdroid-0.4.0-beta.1-arm64-v8a.apk"
   exit 0
 fi
 

@@ -60,7 +60,7 @@ enum class TvErrorKind {
 data class TvTransferError(
     val kind: TvErrorKind,
     val detail: String,
-    val cause: String = "",
+    val causeName: String = "",
 ) : Exception(detail)
 
 data class TvTransferSummary(
@@ -415,7 +415,7 @@ class NativeTotalDropRustBridge : TotalDropRustBridge {
                         TvTransferError(
                             kind = TvErrorKind.entries.getOrElse(errorKindOrdinal) { TvErrorKind.Other },
                             detail = errorDetail.orEmpty(),
-                            cause = errorCause.orEmpty(),
+                            causeName = errorCause.orEmpty(),
                         )
                     } else {
                         null

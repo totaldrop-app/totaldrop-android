@@ -1,0 +1,126 @@
+# SPDX-FileCopyrightText: 2026 The TotalDrop Contributors
+# SPDX-License-Identifier: GPL-3.0-or-later
+
+# Android release: from an `android-v*` tag, runs the full CI gate and builds
+# the signed Google Play bundle (.aab) and signed split APKs with the upload
+# key, verifies 16 KB ELF alignment and the upload certificate fingerprint,
+# records SHA256SUMS, and attests Sigstore OIDC build provenance.
+name: Android release
+
+on:
+  push:
+    tags: ["android-v*"]
+
+permissions:
+  contents: read
+
+jobs:
+  verify:
+    name: Checks
+    uses: ./.github/workflows/ci.yml
+
+  release:
+    name: Signed Play bundle & split APKs
+    needs: verify
+    runs-on: ubuntu-latest
+    environment: play-release
+    permissions:
+      contents: read
+      id-token: write
+      attestations: write
+    defaults:
+      run:
+        working-directory: ui-m3-expressive
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: "21"
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2 # v2.23.0
+        with:
+          channel: stable
+          flutter-version: 3.47.8
+      - name: Rust toolchain and Android targets
+        working-directory: .
+        run: rustup show active-toolchain || rustup toolchain install
+      - name: Verify version parity and monotonic build number
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          (cd .. && ./tools/check-versions.sh)
+          want="${TAG#android-v}"
+          have=$(sed -n 's/^version: \([^+]*\)+.*/\1/p' pubspec.yaml)
+          code=$(sed -n 's/^version: [^+]*+\([0-9]*\).*/\1/p' pubspec.yaml)
+          [ "$want" = "$have" ] || { echo "tag $want, pubspec $have"; exit 1; }
+          prev=$(git describe --tags --abbrev=0 --match 'android-v*' "${TAG}^" 2>/dev/null || true)
+          if [ -n "$prev" ]; then
+            old=$(git show "$prev:ui-m3-expressive/pubspec.yaml" | sed -n 's/^version: [^+]*+\([0-9]*\).*/\1/p')
+            [ "$code" -gt "$old" ] || { echo "build number $code is not above $old ($prev)"; exit 1; }
+          fi
+      - run: flutter pub get --enforce-lockfile
+      # The upload key lives only in this environment's secrets and reaches
+      # Gradle through environment variables, so the password never touches
+      # disk. Without the key the build fails instead of using the debug key.
+      - name: Build signed Play bundle and split APKs
+        env:
+          KEYSTORE: ${{ secrets.ANDROID_UPLOAD_KEYSTORE }}
+          ANDROID_UPLOAD_PASSWORD: ${{ secrets.ANDROID_UPLOAD_PASSWORD }}
+          TOTALDROP_REQUIRE_RELEASE_KEY: "1"
+        run: |
+          [ -n "$KEYSTORE" ] && [ -n "$ANDROID_UPLOAD_PASSWORD" ] || { echo "upload key secrets missing"; exit 1; }
+          umask 077
+          printf '%s' "$KEYSTORE" | base64 -d > "$RUNNER_TEMP/upload.jks"
+          ANDROID_UPLOAD_STORE_FILE="$RUNNER_TEMP/upload.jks" flutter build appbundle --release
+          ANDROID_UPLOAD_STORE_FILE="$RUNNER_TEMP/upload.jks" flutter build apk --release --split-per-abi
+          rm -f "$RUNNER_TEMP/upload.jks"
+      # Verify ELF PT_LOAD >= 16 KB alignment inside the release AAB and
+      # uncompressed 16 KB APK alignment on 64-bit split APKs.
+      - name: Verify 16 KB ELF alignment
+        run: |
+          python3 tool/check_16kb_elf.py build/app/outputs/bundle/release/app-release.aab
+          for abi in arm64-v8a x86_64; do
+            apk="build/app/outputs/flutter-apk/app-${abi}-release.apk"
+            [ -f "$apk" ] || { echo "missing split APK: $apk" >&2; exit 1; }
+            python3 tool/check_16kb_elf.py --require-uncompressed "$apk"
+          done
+      - name: Verify upload certificate fingerprint
+        env:
+          # SHA-256 of the upload certificate registered with Google Play.
+          EXPECTED: "36:49:0B:05:DB:63:AC:B8:E7:B8:46:F7:84:D2:1F:83:6B:E0:A9:74:5E:DF:A8:1D:BD:F0:51:9F:83:3D:F0:35"
+        run: |
+          for artifact in \
+            build/app/outputs/bundle/release/app-release.aab \
+            build/app/outputs/flutter-apk/app-arm64-v8a-release.apk \
+            build/app/outputs/flutter-apk/app-armeabi-v7a-release.apk \
+            build/app/outputs/flutter-apk/app-x86_64-release.apk; do
+            got=$(keytool -printcert -jarfile "$artifact" | sed -n 's/^\s*SHA256: //p' | head -1)
+            [ "$got" = "$EXPECTED" ] || { echo "$artifact signed with $got" >&2; exit 1; }
+          done
+      - name: Stage release artifacts and SHA256SUMS
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          ver="${TAG#android-v}"
+          mkdir -p ../dist
+          cp build/app/outputs/bundle/release/app-release.aab "../dist/TotalDrop-${ver}.aab"
+          for abi in arm64-v8a armeabi-v7a x86_64; do
+            cp "build/app/outputs/flutter-apk/app-${abi}-release.apk" "../dist/TotalDrop-${ver}-${abi}.apk"
+          done
+          (cd ../dist && sha256sum -- *.aab *.apk > SHA256SUMS)
+      - name: Remove the key
+        if: always()
+        run: rm -f "$RUNNER_TEMP/upload.jks"
+      - uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            dist/*.aab
+            dist/*.apk
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: android-release-artifacts
+          path: dist/
+          retention-days: 30

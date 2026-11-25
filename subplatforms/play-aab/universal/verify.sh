@@ -22,8 +22,8 @@ if [ "${1:-}" = "--check-recipe" ]; then
 fi
 
 ART_DIR="${1:?usage: verify.sh [--check-recipe | <artifact-dir>]}"
-[ -f "$ART_DIR/totaldrop-android-0.3.0-beta.6-universal.aab" ] || { echo "missing artifact $ART_DIR/totaldrop-android-0.3.0-beta.6-universal.aab" >&2; exit 1; }
-[ -s "$ART_DIR/totaldrop-android-0.3.0-beta.6-universal.aab" ] || { echo "empty artifact $ART_DIR/totaldrop-android-0.3.0-beta.6-universal.aab" >&2; exit 1; }
+[ -f "$ART_DIR/totaldrop-android-0.4.0-beta.1-universal.aab" ] || { echo "missing artifact $ART_DIR/totaldrop-android-0.4.0-beta.1-universal.aab" >&2; exit 1; }
+[ -s "$ART_DIR/totaldrop-android-0.4.0-beta.1-universal.aab" ] || { echo "empty artifact $ART_DIR/totaldrop-android-0.4.0-beta.1-universal.aab" >&2; exit 1; }
 [ -f "$ART_DIR/SHA256SUMS" ] || { echo "missing $ART_DIR/SHA256SUMS" >&2; exit 1; }
 (cd "$ART_DIR" && sha256sum -c SHA256SUMS)
-echo "artifact verified: $ART_DIR/totaldrop-android-0.3.0-beta.6-universal.aab"
+echo "artifact verified: $ART_DIR/totaldrop-android-0.4.0-beta.1-universal.aab"

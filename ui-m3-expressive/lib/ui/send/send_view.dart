@@ -7,6 +7,7 @@ import 'package:flutter/services.dart';
 import 'package:share_plus/share_plus.dart';
 
 import '../../l10n/app_localizations.dart';
+import '../core/adaptive.dart';
 import '../core/common.dart';
 import '../core/l10n.dart';
 import '../core/mark.dart';
@@ -99,8 +100,9 @@ class SendView extends StatelessWidget {
                     SendStage.connected => _Connected(vm: vm),
                     SendStage.transferring => _Transferring(vm: vm),
                     SendStage.done => _Done(vm: vm),
-                    SendStage.failed => CenteredScroll(
-                      child: ErrorPanel(error: vm.error!, onRetry: vm.start),
+                    SendStage.failed => AdaptiveErrorStage(
+                      error: vm.error!,
+                      onRetry: vm.start,
                     ),
                   },
                 ),
@@ -148,151 +150,187 @@ class _Picking extends StatelessWidget {
     final l = AppLocalizations.of(context);
     final theme = Theme.of(context);
     if (vm.files.isEmpty) {
-      // One screen, one job: the only action is choosing files. With the
-      // largest text the page scrolls instead of running off (#322).
-      return CustomScrollView(
-        slivers: [
-          SliverFillRemaining(
-            hasScrollBody: false,
-            child: Padding(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  const Spacer(),
-                  Icon(
-                    Icons.upload_file_outlined,
-                    size: 56,
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
-                  Gap.m,
-                  Text(
-                    l.sendEmpty,
-                    style: theme.textTheme.headlineSmall,
-                    textAlign: TextAlign.center,
-                  ),
-                  Gap.s,
-                  Text(
-                    l.sendEmptyHint,
-                    textAlign: TextAlign.center,
-                    style: theme.textTheme.bodyLarge?.copyWith(
-                      color: theme.colorScheme.onSurfaceVariant,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (vm.addFailed) ...[
-                    const _AddFailed(textAlign: TextAlign.center),
-                    Gap.m,
-                  ],
-                  FilledButton.icon(
-                    onPressed: vm.addFiles,
-                    icon: const Icon(Icons.attach_file),
-                    label: Text(l.sendAddFiles),
-                  ),
-                  Gap.s,
-                  OutlinedButton.icon(
-                    onPressed: () => vm.setTextMode(true),
-                    icon: const Icon(Icons.notes),
-                    label: Text(l.sendText),
-                  ),
-                ],
-              ),
+      final prompt = Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Icon(
+            Icons.upload_file_outlined,
+            size: 56,
+            color: theme.colorScheme.onSurfaceVariant,
+          ),
+          Gap.m,
+          Text(
+            l.sendEmpty,
+            style: theme.textTheme.headlineSmall,
+            textAlign: TextAlign.center,
+          ),
+          Gap.s,
+          Text(
+            l.sendEmptyHint,
+            textAlign: TextAlign.center,
+            style: theme.textTheme.bodyLarge?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ],
       );
-    }
-    return Column(
-      children: [
-        Expanded(
-          child: ListView.separated(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 8),
-            itemCount: vm.files.length + 1,
-            separatorBuilder: (_, _) => const Divider(),
-            itemBuilder: (context, i) {
-              if (i == vm.files.length) {
-                return Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    TextButton.icon(
-                      onPressed: vm.addFiles,
-                      icon: const Icon(Icons.add),
-                      label: Text(l.sendAddFiles),
-                    ),
-                    if (vm.addFailed)
-                      const Padding(
-                        padding: EdgeInsetsDirectional.fromSTEB(12, 0, 12, 8),
-                        child: _AddFailed(textAlign: TextAlign.start),
-                      ),
-                  ],
-                );
-              }
-              final f = vm.files[i];
-              return ListTile(
-                leading: Icon(
-                  Icons.insert_drive_file_outlined,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                title: Text(
-                  f.name,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                subtitle: Text(
-                  formatBytes(l, f.size),
-                  style: const TextStyle(
-                    fontFeatures: [FontFeature.tabularFigures()],
+      final actions = Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (vm.addFailed) ...[
+            const _AddFailed(textAlign: TextAlign.center),
+            Gap.m,
+          ],
+          FilledButton.icon(
+            onPressed: vm.addFiles,
+            icon: const Icon(Icons.attach_file),
+            label: Text(l.sendAddFiles),
+          ),
+          Gap.s,
+          OutlinedButton.icon(
+            onPressed: () => vm.setTextMode(true),
+            icon: const Icon(Icons.notes),
+            label: Text(l.sendText),
+          ),
+        ],
+      );
+      // One screen, one job: the only action is choosing files. With the
+      // largest text the page scrolls instead of running off (#322).
+      return AdaptivePaneLayout(
+        primary: CenteredScroll(child: prompt),
+        secondary: CenteredScroll(child: actions),
+        singlePane: LayoutBuilder(
+          builder: (context, constraints) => CustomScrollView(
+            slivers: [
+              SliverFillRemaining(
+                hasScrollBody: false,
+                child: Padding(
+                  padding: readableScrollPadding(
+                    viewportWidth: constraints.maxWidth,
+                    margin: adaptiveHorizontalMargin(constraints.maxWidth),
+                  ),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [const Spacer(), prompt, const Spacer(), actions],
                   ),
                 ),
-                trailing: KeepIconButtonVariant(
-                  child: IconButton(
-                    tooltip: l.sendRemove,
-                    icon: const Icon(Icons.close),
-                    onPressed: () => vm.remove(f),
-                  ),
-                ),
-              );
-            },
+              ),
+            ],
           ),
         ),
-        const Divider(),
-        // Pinned under the list. With the largest text it takes at most
-        // half the screen and scrolls itself, so the list keeps its room
-        // (#322).
-        ConstrainedBox(
-          constraints: BoxConstraints(
-            maxHeight: MediaQuery.sizeOf(context).height / 2,
-          ),
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
+      );
+    }
+
+    final fileList = LayoutBuilder(
+      builder: (context, constraints) => ListView.separated(
+        padding: readableScrollPadding(
+          viewportWidth: constraints.maxWidth,
+          margin: adaptiveHorizontalMargin(constraints.maxWidth),
+          top: 8,
+          bottom: 8,
+        ),
+        itemCount: vm.files.length + 1,
+        separatorBuilder: (_, _) => const Divider(),
+        itemBuilder: (context, i) {
+          if (i == vm.files.length) {
+            return Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(l.sendStrongCode),
-                  subtitle: Text(l.sendStrongCodeHint),
-                  value: vm.strong,
-                  onChanged: vm.setStrong,
+                TextButton.icon(
+                  onPressed: vm.addFiles,
+                  icon: const Icon(Icons.add),
+                  label: Text(l.sendAddFiles),
                 ),
-                Gap.s,
-                FilledButton.icon(
-                  onPressed: vm.start,
-                  icon: const Icon(Icons.key_outlined),
-                  // Read out when the list appears after the picker's copy
-                  // and when it changes, so a screen reader is not left
-                  // silent where "Add files" was (#271).
-                  label: Announced(
-                    Text(
-                      '${l.sendCreateCode} · ${l.itemsAndSize(vm.files.length, formatBytes(l, vm.totalSize))}',
-                    ),
+                if (vm.addFailed)
+                  const Padding(
+                    padding: EdgeInsetsDirectional.fromSTEB(12, 0, 12, 8),
+                    child: _AddFailed(textAlign: TextAlign.start),
                   ),
-                ),
               ],
+            );
+          }
+          final f = vm.files[i];
+          return ListTile(
+            leading: Icon(
+              Icons.insert_drive_file_outlined,
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+            title: Text(f.name, maxLines: 1, overflow: TextOverflow.ellipsis),
+            subtitle: Text(
+              formatBytes(l, f.size),
+              style: const TextStyle(
+                fontFeatures: [FontFeature.tabularFigures()],
+              ),
+            ),
+            trailing: KeepIconButtonVariant(
+              child: IconButton(
+                tooltip: l.sendRemove,
+                icon: const Icon(Icons.close),
+                onPressed: () => vm.remove(f),
+              ),
+            ),
+          );
+        },
+      ),
+    );
+
+    final controls = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(l.sendStrongCode),
+          subtitle: Text(l.sendStrongCodeHint),
+          value: vm.strong,
+          onChanged: vm.setStrong,
+        ),
+        Gap.s,
+        FilledButton.icon(
+          onPressed: vm.start,
+          icon: const Icon(Icons.key_outlined),
+          // Read out when the list appears after the picker's copy
+          // and when it changes, so a screen reader is not left
+          // silent where "Add files" was (#271).
+          label: Announced(
+            Text(
+              '${l.sendCreateCode} · ${l.itemsAndSize(vm.files.length, formatBytes(l, vm.totalSize))}',
             ),
           ),
         ),
       ],
+    );
+
+    return AdaptivePaneLayout(
+      primary: fileList,
+      secondary: CenteredScroll(child: controls),
+      singlePane: Column(
+        children: [
+          Expanded(child: fileList),
+          const Divider(),
+          // Pinned under the list. With the largest text it takes at most
+          // half the screen and scrolls itself, so the list keeps its room
+          // (#322).
+          ConstrainedBox(
+            constraints: BoxConstraints(
+              maxHeight: MediaQuery.sizeOf(context).height / 2,
+            ),
+            child: LayoutBuilder(
+              builder: (context, constraints) => SingleChildScrollView(
+                padding: readableScrollPadding(
+                  viewportWidth: constraints.maxWidth,
+                  margin: adaptiveHorizontalMargin(constraints.maxWidth),
+                  top: 8,
+                  bottom: 24,
+                ),
+                child: controls,
+              ),
+            ),
+          ),
+        ],
+      ),
     );
   }
 }
@@ -310,6 +348,10 @@ class _TextPicking extends StatefulWidget {
 
 class _TextPickingState extends State<_TextPicking> {
   late final _controller = TextEditingController(text: _boxText);
+  // Shared across AdaptivePaneLayout branches so fold/unfold and tabletop
+  // keyboard collapse preserve focus, IME composing text, and selection (#632).
+  final _fieldKey = GlobalKey();
+  final _focusNode = FocusNode();
 
   String get _boxText {
     final vm = widget.vm;
@@ -331,6 +373,7 @@ class _TextPickingState extends State<_TextPicking> {
 
   @override
   void dispose() {
+    _focusNode.dispose();
     _controller.dispose();
     super.dispose();
   }
@@ -364,113 +407,169 @@ class _TextPickingState extends State<_TextPicking> {
     // The box shows hidden characters as the system draws them, which is
     // often not at all: the screen names them (#326).
     final hidden = vm.text.isNotEmpty && shownText(vm.text).hidden;
-    // The box takes the room left; with the keyboard up or large type,
-    // the page scrolls instead of overflowing.
-    return CustomScrollView(
-      slivers: [
-        SliverFillRemaining(
-          hasScrollBody: false,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(24, 8, 24, 24),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                Expanded(
-                  child: ConstrainedBox(
-                    constraints: const BoxConstraints(minHeight: 160),
-                    child: TextField(
-                      controller: _controller,
-                      // A long text cannot be edited, only taken away.
-                      readOnly: vm.bigText,
-                      autofocus: vm.text.isEmpty,
-                      maxLines: null,
-                      expands: true,
-                      textAlignVertical: TextAlignVertical.top,
-                      keyboardType: TextInputType.multiline,
-                      decoration: InputDecoration(
-                        hintText: l.sendTextHint,
-                        border: const OutlineInputBorder(),
-                      ),
-                      onChanged: vm.setText,
-                    ),
-                  ),
-                ),
-                if (notice != null) ...[
-                  Gap.s,
-                  Announced(
-                    Text(
-                      notice,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: warn
-                            ? theme.colorScheme.error
-                            : theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ],
-                if (hidden) ...[
-                  Gap.s,
-                  Announced(
-                    Text(
-                      l.sendTextHidden,
-                      style: theme.textTheme.bodyMedium?.copyWith(
-                        color: theme.colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                ],
-                Gap.s,
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  crossAxisAlignment: WrapCrossAlignment.center,
-                  children: [
-                    if (vm.text.isEmpty)
-                      OutlinedButton.icon(
-                        onPressed: vm.pasteClipboard,
-                        icon: const Icon(Icons.content_paste),
-                        label: Text(l.receivePaste),
-                      )
-                    else
-                      OutlinedButton.icon(
-                        onPressed: () => vm.setText(''),
-                        icon: const Icon(Icons.clear),
-                        label: Text(l.sendRemove),
-                      ),
-                    if (vm.text.isEmpty)
-                      OutlinedButton.icon(
-                        onPressed: () {
-                          vm.setTextMode(false);
-                          if (vm.files.isEmpty) vm.addFiles();
-                        },
-                        icon: const Icon(Icons.attach_file),
-                        label: Text(l.sendAddFiles),
-                      ),
-                  ],
-                ),
-                const Divider(height: 24),
-                SwitchListTile(
-                  contentPadding: EdgeInsets.zero,
-                  title: Text(l.sendStrongCode),
-                  subtitle: Text(l.sendStrongCodeHint),
-                  value: vm.strong,
-                  onChanged: vm.setStrong,
-                ),
-                Gap.s,
-                FilledButton.icon(
-                  onPressed: vm.canStart ? vm.start : null,
-                  icon: const Icon(Icons.key_outlined),
-                  label: Text(
-                    vm.text.isEmpty
-                        ? l.sendCreateCode
-                        : '${l.sendCreateCode} · ${formatBytes(l, vm.textBytes)}',
-                  ),
-                ),
-              ],
+
+    Widget buildEditor({required double minHeight}) => Expanded(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(minHeight: minHeight),
+        child: TextField(
+          key: _fieldKey,
+          focusNode: _focusNode,
+          controller: _controller,
+          // A long text cannot be edited, only taken away.
+          readOnly: vm.bigText,
+          autofocus: vm.text.isEmpty,
+          maxLines: null,
+          expands: true,
+          textAlignVertical: TextAlignVertical.top,
+          keyboardType: TextInputType.multiline,
+          decoration: InputDecoration(
+            hintText: l.sendTextHint,
+            border: const OutlineInputBorder(),
+          ),
+          onChanged: vm.setText,
+        ),
+      ),
+    );
+
+    final notices = <Widget>[
+      if (notice != null) ...[
+        Gap.s,
+        Announced(
+          Text(
+            notice,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: warn
+                  ? theme.colorScheme.error
+                  : theme.colorScheme.onSurfaceVariant,
             ),
           ),
         ),
       ],
+      if (hidden) ...[
+        Gap.s,
+        Announced(
+          Text(
+            l.sendTextHidden,
+            style: theme.textTheme.bodyMedium?.copyWith(
+              color: theme.colorScheme.onSurfaceVariant,
+            ),
+          ),
+        ),
+      ],
+    ];
+
+    final controls = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Wrap(
+          spacing: 8,
+          runSpacing: 8,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            if (vm.text.isEmpty)
+              OutlinedButton.icon(
+                onPressed: vm.pasteClipboard,
+                icon: const Icon(Icons.content_paste),
+                label: Text(l.receivePaste),
+              )
+            else
+              OutlinedButton.icon(
+                onPressed: () => vm.setText(''),
+                icon: const Icon(Icons.clear),
+                label: Text(l.sendRemove),
+              ),
+            if (vm.text.isEmpty)
+              OutlinedButton.icon(
+                onPressed: () {
+                  vm.setTextMode(false);
+                  if (vm.files.isEmpty) vm.addFiles();
+                },
+                icon: const Icon(Icons.attach_file),
+                label: Text(l.sendAddFiles),
+              ),
+          ],
+        ),
+        const Divider(height: 24),
+        SwitchListTile(
+          contentPadding: EdgeInsets.zero,
+          title: Text(l.sendStrongCode),
+          subtitle: Text(l.sendStrongCodeHint),
+          value: vm.strong,
+          onChanged: vm.setStrong,
+        ),
+        Gap.s,
+        FilledButton.icon(
+          onPressed: vm.canStart ? vm.start : null,
+          icon: const Icon(Icons.key_outlined),
+          label: Text(
+            vm.text.isEmpty
+                ? l.sendCreateCode
+                : '${l.sendCreateCode} · ${formatBytes(l, vm.textBytes)}',
+          ),
+        ),
+      ],
+    );
+
+    // The box takes the room left; with the keyboard up or large type,
+    // the page scrolls instead of overflowing.
+    return AdaptivePaneLayout(
+      primary: Builder(
+        builder: (context) {
+          final isTabletop = AdaptivePaneLayout.isTabletopOf(context);
+          return LayoutBuilder(
+            builder: (context, constraints) => CustomScrollView(
+              slivers: [
+                SliverFillRemaining(
+                  hasScrollBody: false,
+                  child: Padding(
+                    padding: readableScrollPadding(
+                      viewportWidth: constraints.maxWidth,
+                      margin: adaptiveHorizontalMargin(constraints.maxWidth),
+                      top: 8,
+                      bottom: 16,
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        buildEditor(minHeight: isTabletop ? 100 : 160),
+                        ...notices,
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        },
+      ),
+      secondary: CenteredScroll(child: controls),
+      singlePane: LayoutBuilder(
+        builder: (context, constraints) => CustomScrollView(
+          slivers: [
+            SliverFillRemaining(
+              hasScrollBody: false,
+              child: Padding(
+                padding: readableScrollPadding(
+                  viewportWidth: constraints.maxWidth,
+                  margin: adaptiveHorizontalMargin(constraints.maxWidth),
+                  top: 8,
+                  bottom: 24,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    buildEditor(minHeight: 160),
+                    ...notices,
+                    Gap.s,
+                    controls,
+                  ],
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -520,10 +619,13 @@ class _Waiting extends StatelessWidget {
       );
     }
 
-    return ListView(
-      padding: const EdgeInsets.all(24),
+    Widget buildStatus({required bool isTabletop}) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Center(child: TotalDropMark(size: 120, sending: true)),
+        Center(
+          child: TotalDropMark(size: isTabletop ? 96 : 120, sending: true),
+        ),
         Gap.s,
         Announced(
           Text(
@@ -534,66 +636,112 @@ class _Waiting extends StatelessWidget {
             ),
           ),
         ),
-        Gap.l,
-        // The code is the content; the frame stays quiet.
-        Card(
-          color: theme.colorScheme.surface,
-          shape: RoundedRectangleBorder(
-            borderRadius: const BorderRadius.all(Radius.circular(28)),
-            side: BorderSide(color: theme.colorScheme.outlineVariant),
-          ),
-          child: Padding(
-            padding: const EdgeInsets.all(24),
-            child: Column(
-              children: [
-                Text(
-                  l.sendYourCode,
-                  style: theme.textTheme.labelLarge?.copyWith(
-                    color: theme.colorScheme.onSurfaceVariant,
-                  ),
+      ],
+    );
+
+    // The code is the content; the frame stays quiet.
+    final codeCard = LayoutBuilder(
+      builder: (context, constraints) => Card(
+        color: theme.colorScheme.surface,
+        shape: RoundedRectangleBorder(
+          borderRadius: const BorderRadius.all(Radius.circular(28)),
+          side: BorderSide(color: theme.colorScheme.outlineVariant),
+        ),
+        child: Padding(
+          padding: EdgeInsets.all(constraints.maxWidth < 300 ? 16 : 24),
+          child: Column(
+            children: [
+              Text(
+                l.sendYourCode,
+                style: theme.textTheme.labelLarge?.copyWith(
+                  color: theme.colorScheme.onSurfaceVariant,
                 ),
-                Gap.s,
-                // English words, left to right in every language.
-                // Spoken with an English voice; the Copy button below copies it.
-                Semantics(
-                  attributedLabel: AttributedString(
-                    code,
-                    attributes: [
-                      LocaleStringAttribute(
-                        range: TextRange(start: 0, end: code.length),
-                        locale: const Locale('en'),
-                      ),
-                    ],
-                  ),
-                  excludeSemantics: true,
-                  child: Directionality(
-                    textDirection: TextDirection.ltr,
-                    child: SelectableText(
-                      code,
-                      textAlign: TextAlign.center,
-                      style: theme.textTheme.headlineLarge,
+              ),
+              Gap.s,
+              // English words, left to right in every language.
+              // Spoken with an English voice; the Copy button below copies it.
+              Semantics(
+                attributedLabel: AttributedString(
+                  code,
+                  attributes: [
+                    LocaleStringAttribute(
+                      range: TextRange(start: 0, end: code.length),
+                      locale: const Locale('en'),
                     ),
+                  ],
+                ),
+                excludeSemantics: true,
+                child: Directionality(
+                  textDirection: TextDirection.ltr,
+                  child: SelectableText(
+                    code,
+                    textAlign: TextAlign.center,
+                    style: theme.textTheme.headlineLarge,
                   ),
                 ),
-                Gap.m,
-                ButtonPair(
-                  spacing: 8,
-                  outlined: PairedButton(l.sendCopy, copy, icon: Icons.copy),
-                  filled: PairedButton(l.sendShare, share, icon: Icons.share),
-                ),
+              ),
+              Gap.m,
+              ButtonPair(
+                spacing: 8,
+                outlined: PairedButton(l.sendCopy, copy, icon: Icons.copy),
+                filled: PairedButton(l.sendShare, share, icon: Icons.share),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+
+    final codeHint = Text(
+      l.sendCodeHint,
+      textAlign: TextAlign.center,
+      style: theme.textTheme.bodyLarge,
+    );
+
+    return AdaptivePaneLayout(
+      primary: Builder(
+        builder: (context) {
+          final isTabletop = AdaptivePaneLayout.isTabletopOf(context);
+          return CenteredScroll(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                buildStatus(isTabletop: isTabletop),
+                if (!isTabletop) ...[Gap.xl, const SameNetworkNote()],
               ],
             ),
-          ),
-        ),
-        Gap.m,
-        Text(
-          l.sendCodeHint,
-          textAlign: TextAlign.center,
-          style: theme.textTheme.bodyLarge,
-        ),
-        Gap.xl,
-        const SameNetworkNote(),
-      ],
+          );
+        },
+      ),
+      secondary: Builder(
+        builder: (context) {
+          final isTabletop = AdaptivePaneLayout.isTabletopOf(context);
+          return CenteredScroll(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                codeCard,
+                Gap.m,
+                codeHint,
+                if (isTabletop) ...[Gap.l, const SameNetworkNote()],
+              ],
+            ),
+          );
+        },
+      ),
+      singlePane: AdaptiveScrollColumn(
+        children: [
+          buildStatus(isTabletop: false),
+          Gap.l,
+          codeCard,
+          Gap.m,
+          codeHint,
+          Gap.xl,
+          const SameNetworkNote(),
+        ],
+      ),
     );
   }
 }
@@ -606,23 +754,48 @@ class _Connected extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    return ListView(
-      padding: const EdgeInsets.all(24),
-      children: [
-        const Center(child: TotalDropMark(size: 120, sending: true)),
-        Gap.l,
-        VerificationWords(words: vm.words),
-        Gap.m,
-        Announced(
-          Text(
-            l.sendWaitingAccept,
-            textAlign: TextAlign.center,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
+    final waitingText = Announced(
+      Text(
+        l.sendWaitingAccept,
+        textAlign: TextAlign.center,
+        style: Theme.of(context).textTheme.bodyMedium
+            ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+      ),
+    );
+    final words = VerificationWords(words: vm.words);
+
+    return AdaptivePaneLayout(
+      primary: Builder(
+        builder: (context) {
+          final isTabletop = AdaptivePaneLayout.isTabletopOf(context);
+          return CenteredScroll(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Center(
+                  child: TotalDropMark(
+                    size: isTabletop ? 96 : 120,
+                    sending: true,
+                  ),
+                ),
+                Gap.m,
+                waitingText,
+              ],
             ),
-          ),
-        ),
-      ],
+          );
+        },
+      ),
+      secondary: CenteredScroll(child: words),
+      singlePane: AdaptiveScrollColumn(
+        children: [
+          const Center(child: TotalDropMark(size: 120, sending: true)),
+          Gap.l,
+          words,
+          Gap.m,
+          waitingText,
+        ],
+      ),
     );
   }
 }
@@ -634,23 +807,52 @@ class _Transferring extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final l = AppLocalizations.of(context);
-    return ListView(
-      padding: const EdgeInsets.all(24),
+    Widget buildStatus({required bool isTabletop}) => Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        const Center(child: TotalDropMark(size: 140, sending: true)),
+        Center(
+          child: TotalDropMark(size: isTabletop ? 96 : 140, sending: true),
+        ),
         Gap.l,
+        // Keep the live-region headline separate from the sibling
+        // TransferProgress bar inside two-pane layouts.
         Announced(
           Text(
             l.sendSending,
             textAlign: TextAlign.center,
             style: Theme.of(context).textTheme.headlineSmall,
           ),
+          container: true,
         ),
         Gap.m,
         TransferProgress(done: vm.done, total: vm.total),
-        Gap.l,
-        if (vm.words.isNotEmpty) VerificationWords(words: vm.words),
       ],
+    );
+    if (vm.words.isEmpty) {
+      return AdaptiveSinglePane(
+        child: Builder(
+          builder: (context) => AdaptiveScrollColumn(
+            children: [
+              buildStatus(isTabletop: AdaptivePaneLayout.isTabletopOf(context)),
+            ],
+          ),
+        ),
+      );
+    }
+    final words = VerificationWords(words: vm.words);
+    return AdaptivePaneLayout(
+      primary: Builder(
+        builder: (context) => CenteredScroll(
+          child: buildStatus(
+            isTabletop: AdaptivePaneLayout.isTabletopOf(context),
+          ),
+        ),
+      ),
+      secondary: CenteredScroll(child: words),
+      singlePane: AdaptiveScrollColumn(
+        children: [buildStatus(isTabletop: false), Gap.l, words],
+      ),
     );
   }
 }
@@ -664,43 +866,60 @@ class _Done extends StatelessWidget {
     final l = AppLocalizations.of(context);
     final theme = Theme.of(context);
     final s = vm.summary;
-    return CenteredScroll(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          const Center(child: DoneBadge()),
-          Gap.l,
-          Announced(
-            Text(
-              l.sendDone,
-              textAlign: TextAlign.center,
-              style: theme.textTheme.headlineSmall,
-            ),
-          ),
+    final header = <Widget>[
+      const Center(child: DoneBadge()),
+      Gap.l,
+      Announced(
+        Text(
+          l.sendDone,
+          textAlign: TextAlign.center,
+          style: theme.textTheme.headlineSmall,
+        ),
+      ),
+      Gap.s,
+      if (vm.textMode)
+        Text(l.sendTextDone, textAlign: TextAlign.center)
+      else if (s != null) ...[
+        Text(l.sendDoneBody(s.filesOk), textAlign: TextAlign.center),
+        if (s.filesFailed > 0) ...[
           Gap.s,
-          if (vm.textMode)
-            Text(l.sendTextDone, textAlign: TextAlign.center)
-          else if (s != null) ...[
-            Text(l.sendDoneBody(s.filesOk), textAlign: TextAlign.center),
-            if (s.filesFailed > 0) ...[
-              Gap.s,
-              Text(
-                l.sendSomeFailed(s.filesFailed),
-                textAlign: TextAlign.center,
-                style: TextStyle(color: theme.colorScheme.error),
-              ),
-            ],
-          ],
-          Gap.xl,
-          FilledButton(
-            onPressed: () {
-              vm.reset();
-              Navigator.pop(context);
-            },
-            child: Text(l.done),
+          Text(
+            l.sendSomeFailed(s.filesFailed),
+            textAlign: TextAlign.center,
+            style: TextStyle(color: theme.colorScheme.error),
           ),
         ],
+      ],
+    ];
+    final doneButton = FilledButton(
+      onPressed: () {
+        vm.reset();
+        Navigator.pop(context);
+      },
+      child: Text(l.done),
+    );
+    return AdaptivePaneLayout(
+      allowFlatTwoPane: false,
+      primary: CenteredScroll(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: header,
+        ),
+      ),
+      secondary: CenteredScroll(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [doneButton],
+        ),
+      ),
+      singlePane: CenteredScroll(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [...header, Gap.xl, doneButton],
+        ),
       ),
     );
   }

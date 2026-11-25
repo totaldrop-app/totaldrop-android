@@ -3,7 +3,7 @@ name = "rust_lib_totaldrop"
 description = "Bridge between the TotalDrop Flutter app and totaldrop-core"
 license = "GPL-3.0-or-later"
 # Follows the Android app, ui-m3-expressive/pubspec.yaml (docs/versioning.md).
-version = "0.3.0-beta.7"
+version = "0.4.0-beta.1"
 edition.workspace = true
 rust-version.workspace = true
 repository.workspace = true

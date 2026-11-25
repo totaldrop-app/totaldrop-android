@@ -16,8 +16,8 @@ if [ "${1:-}" = "--check-recipe" ]; then
   [ -f "$RECIPE" ] || { echo "missing $RECIPE" >&2; exit 1; }
   [ -e "$DELEGATE" ] || { echo "missing upstream delegate $DELEGATE" >&2; exit 1; }
   grep -q 'unit_id = "android-play-aab-universal"' "$RECIPE"
-  grep -q 'artifact_name = "totaldrop-android-0.3.0-beta.6-universal.aab"' "$RECIPE"
-  echo "recipe check ok: android-play-aab-universal -> totaldrop-android-0.3.0-beta.6-universal.aab"
+  grep -q 'artifact_name = "totaldrop-android-0.4.0-beta.1-universal.aab"' "$RECIPE"
+  echo "recipe check ok: android-play-aab-universal -> totaldrop-android-0.4.0-beta.1-universal.aab"
   exit 0
 fi
 
@@ -29,9 +29,9 @@ if [ "${1:-}" = "--package-staged" ]; then
   trap 'rm -rf "$stage_root"' EXIT
   cp -R "$STAGE_IN/." "$stage_root/" 2>/dev/null || true
   printf 'unit=%s\narch=%s\nformat=%s\ntarget=%s\n' "android-play-aab-universal" "universal" "play-aab" "aarch64-linux-android,armv7-linux-androideabi,x86_64-linux-android" >"$stage_root/BUILD_METADATA.txt"
-  tar --sort=name --mtime="@${SOURCE_DATE_EPOCH:-1760000000}" --owner=0 --group=0 --numeric-owner -cf - -C "$stage_root" . | gzip -n >"$OUT_DIR/totaldrop-android-0.3.0-beta.6-universal.aab"
-  (cd "$OUT_DIR" && sha256sum "totaldrop-android-0.3.0-beta.6-universal.aab" >SHA256SUMS)
-  echo "packaged android-play-aab-universal -> $OUT_DIR/totaldrop-android-0.3.0-beta.6-universal.aab"
+  tar --sort=name --mtime="@${SOURCE_DATE_EPOCH:-1760000000}" --owner=0 --group=0 --numeric-owner -cf - -C "$stage_root" . | gzip -n >"$OUT_DIR/totaldrop-android-0.4.0-beta.1-universal.aab"
+  (cd "$OUT_DIR" && sha256sum "totaldrop-android-0.4.0-beta.1-universal.aab" >SHA256SUMS)
+  echo "packaged android-play-aab-universal -> $OUT_DIR/totaldrop-android-0.4.0-beta.1-universal.aab"
   exit 0
 fi
 
